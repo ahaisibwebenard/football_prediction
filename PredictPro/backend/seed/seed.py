@@ -1,0 +1,112 @@
+"""Idempotent seed: exactly one initial admin; deterministic synthetic seasons."""
+
+import json
+import os
+import random
+import math
+from pathlib import Path
+from datetime import timedelta
+from sqlalchemy import select
+from backend.db import SessionLocal
+from backend.models.entities import User, League, Team, Match, Setting, now
+from backend.utils.security import hash_password
+from backend.services.prediction import get_prediction, evaluate
+
+
+def poisson(rng, lam):
+    value = 0
+    p = 1.0
+    limit = math.exp(-lam)
+    while p > limit:
+        value += 1
+        p *= rng.random()
+    return value - 1
+
+
+def seed_sample(db):
+    data = json.loads(Path(__file__).with_name("sample.json").read_text())
+    rng = random.Random(data["seed"])
+    added = 0
+    for info in data["leagues"]:
+        if db.scalar(select(League).where(League.code == info["code"])):
+            continue
+        league = League(name=info["name"], code=info["code"])
+        db.add(league)
+        db.flush()
+        teams = [Team(name=n, league_id=league.id) for n in info["teams"]]
+        db.add_all(teams)
+        db.flush()
+        base = now().replace(hour=15, minute=0, second=0, microsecond=0)
+        # Ten rounds with all directed pairs. No future result is used to predict a prior game.
+        idx = 0
+        for round_no in range(3):
+            for hi, h in enumerate(teams):
+                for ai, a in enumerate(teams):
+                    if hi == ai:
+                        continue
+                    idx += 1
+                    m = Match(
+                        league_id=league.id,
+                        home_id=h.id,
+                        away_id=a.id,
+                        kickoff=base - timedelta(days=190 - idx * 2),
+                        status="FINISHED",
+                        home_goals=poisson(rng, 1.8 - hi * 0.12),
+                        away_goals=poisson(rng, 1.35 - ai * 0.09),
+                        source="sample",
+                    )
+                    db.add(m)
+                    db.flush()
+                    p = get_prediction(db, m, retrospective=True)
+                    # Backtest rows are explicitly ineligible for live accuracy.
+                    evaluate(db, m)
+                    added += 1
+        for i in range(6):
+            h, a = teams[i], teams[(i + 1) % len(teams)]
+            m = Match(
+                league_id=league.id,
+                home_id=h.id,
+                away_id=a.id,
+                kickoff=base + timedelta(days=i + 1),
+                source="sample",
+                status="SCHEDULED",
+            )
+            db.add(m)
+            db.flush()
+            get_prediction(db, m)
+            added += 1
+    return added
+
+
+def main():
+    with SessionLocal() as db:
+        if not db.scalar(select(User).where(User.role == "ADMIN")):
+            username = os.getenv("SEED_ADMIN_USERNAME")
+            password = os.getenv("SEED_ADMIN_PASSWORD")
+            if not username or not password:
+                raise RuntimeError(
+                    "Set SEED_ADMIN_USERNAME and SEED_ADMIN_PASSWORD in .env."
+                )
+            db.add(
+                User(
+                    name="PredictPro Administrator",
+                    email=os.getenv("SEED_ADMIN_EMAIL", "admin@example.com").lower(),
+                    username=username.lower(),
+                    password_hash=hash_password(password),
+                    role="ADMIN",
+                    must_change=True,
+                )
+            )
+        if not db.get(Setting, "site_name"):
+            db.add(Setting(key="site_name", value="PredictPro"))
+        if not db.get(Setting, "maintenance"):
+            db.add(Setting(key="maintenance", value="false"))
+        count = seed_sample(db)
+        db.commit()
+        print(
+            f"Seed complete: {count} synthetic matches added. Initial administrator must change password."
+        )
+
+
+if __name__ == "__main__":
+    main()

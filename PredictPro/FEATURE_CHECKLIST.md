@@ -1,0 +1,61 @@
+# PredictPro acceptance checklist
+
+“Implemented” means the code and UI flow are included. Automated verification is identified separately; it does not claim a completed browser or live-provider test.
+
+| Requirement | Implemented | Verification / acceptance action |
+|---|---|---|
+| FastAPI, SQLAlchemy/SQLite and migrations | Yes | Fresh Alembic upgrade and seed smoke test completed |
+| Organized backend/frontend, env example and README | Yes | Full source manifest and archive validated |
+| Name/email/username signup; login/logout | Yes | Automated auth, role and logout tests |
+| JWT httpOnly cookies and bcrypt hashes | Yes | Automated cookie/hash checks; Secure prefix enforced by production config |
+| One initial admin from environment | Yes | Idempotent seed; default admin hash and forced change tested |
+| Forgot password and single-use recovery | Yes | Delivery captured in tests; token reuse and expiry tested; real SMTP unverified |
+| Login throttling and account lock/unlock | Yes | Automated failed-login, rate-limit and recovery tests |
+| Input validation, SQL injection and XSS defenses | Yes | Validation/injection-shaped input tests; frontend escapes dynamic HTML; CSP and origin checks |
+| CSRF and role-based admin protection | Yes | Automated missing/foreign-origin CSRF and role checks |
+| Poisson + Elo + recent form + home advantage + H2H | Yes | Distribution and chronological isolation tests; all coefficients explained in source/README |
+| Outcome probabilities, xG, scoreline, O/U and BTTS | Yes | Probability normalization/bounds tested; numbers accompany charts |
+| Confidence labels and plain-English explanations | Yes | Service tests verify explanation and sparse-data confidence |
+| Provider ingestion and bundled offline fallback | Yes | Mocked live import/deduplication and provider failure tests; no live credentials used |
+| Stored predictions and honest accuracy history | Yes | Frozen snapshot, eligibility and source separation tests |
+| Football-data disclaimers | Yes | Auth, navigation, footer, match explanations and README |
+| Dashboard league/date/team/search filters | Yes | API filters tested; browser interaction unverified |
+| Match details, Chart.js chart, form and H2H | Yes | Data service covered; chart syntax/assets checked, browser rendering unverified |
+| Prediction history | Yes | History endpoint covered; 50-record pagination |
+| Favorite teams | Yes | Toggle and persistence tested |
+| User picks and AI leaderboard | Yes | Pick closure tested; correct-outcome points computed after final results |
+| Profile and password changes | Yes | Profile and recovery tested; password rotation in first-login tests |
+| Followed-match notifications | Yes | Duplicate-safe result notifications and mark-read tested; UI polls every 60 seconds |
+| Admin overview with charts/activity | Yes | Protected overview endpoint tested; chart presentation unverified |
+| User search/view/create/edit/delete | Yes | Account lifecycle integration test |
+| Suspend/activate/unlock | Yes | Automated suspension and activation checks |
+| Reset link and temporary password | Yes | Both recovery routes tested; hashes only and forced change |
+| Audited impersonation and return banner | Yes | Start/return, role denial and password denial tested; visible banner implemented |
+| Audit actor/action/time/IP | Yes | Audit persistence verified; secrets omitted |
+| Match, team and league CRUD | Yes | Team/league constraints tested; result/prediction service covered |
+| Trigger sync and calibration | Yes | API tests verify offline sync, mocked live sync and calibration report |
+| Site name, API-key settings, maintenance | Yes | Maintenance tested; site name updates public metadata; API key contents never returned |
+| Dark navy/emerald theme and light toggle | Yes | Responsive styles and persistent toggle included; visual inspection pending |
+| Mobile sidebar, labels, focus and keyboard affordances | Yes | CSS breakpoints, native controls, skip link, modal focus and Escape handling; device/keyboard audit pending |
+| Skeletons, empty states, toasts, validation errors | Yes | Included across pages; browser walkthrough pending |
+| Automated auth/role/model tests | Yes | 19 tests passed; see VERIFICATION.md. Run `python -m pytest backend/tests -q` to repeat |
+| Deployment instructions | Yes | Render/Railway persistent-volume instructions; Vercel limitation explained; no deployment created |
+
+## Local browser walkthrough
+
+1. Start the app using README instructions. At http://localhost:8000 sign in as admin/benard and confirm access is blocked until the password changes.
+2. Set a new administrator password. Open Match center. Switch theme, resize to phone/tablet/desktop widths and operate the mobile menu using keyboard and pointer.
+3. Filter by one demo league, team and UTC date. Open a match and compare the numerical probabilities with its Chart.js bars. Inspect form, earlier meetings and the full explanation.
+4. Create a USER account. Submit a pick, follow an upcoming match and favorite a team. Reload to confirm persistence. Edit profile and change password.
+5. Test Forgot password. Open the new development email under backend/outbox, follow its link, reset, then confirm the link cannot be reused.
+6. As admin, search/view/edit the user. Generate a recovery link or temporary password. Suspend the user and verify they cannot continue; activate/unlock and verify access returns.
+7. Log in as the active normal user. Confirm the banner, denied admin routes, blocked password/pick actions, then Return to admin. Inspect audit entries.
+8. Create a manual league, two teams and a fixture with kickoff a few minutes ahead. As USER, follow it and submit a pick before kickoff. After kickoff, enter a final score as admin, retaining its kickoff and participant IDs. Return as USER; verify the notification, leaderboard points, history and manual-source accuracy. Never adjust a past kickoff merely to make an old pick count.
+9. Exercise admin match/team/league create/edit/delete. A referenced team/league delete should return a clear conflict. Read the confirmation before permanently deleting a match and its picks.
+10. Enable maintenance. USER features should show maintenance; admin retains controls. Disable it. Change the site name and reload to verify the header and document title.
+11. Configure a valid provider key and sync. Verify live fixtures have source `live` and no “Demo” label. Review provider-plan errors in the sync report. Calibrate and inspect its walk-forward report; existing match predictions must remain frozen.
+12. Before a real deployment, verify actual SMTP delivery, HTTPS Secure cookies, host/origin configuration, database backups and device/keyboard behavior with your hosting configuration.
+
+## Known verification limits
+
+The authoring environment's managed browser-preview process could not access its Python runtime. Consequently, no claim is made that browser screenshots, responsive rendering, keyboard navigation or Chart.js rendering were visually tested. Backend tests and JavaScript syntax checks are independent of that limitation. The model is not externally validated on a real prospective football dataset; synthetic backtests establish software behavior only.

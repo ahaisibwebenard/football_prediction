@@ -1,0 +1,8 @@
+{
+  "notice": "SYNTHETIC educational data. Team names are illustrative; fixtures and scores are not real sporting records.",
+  "seed": 1047,
+  "leagues": [
+    {"code":"DEMO_PL","name":"Premier League · Demo","teams":["Manchester United · Demo","Arsenal · Demo","Liverpool · Demo","Manchester City · Demo","Chelsea · Demo","Newcastle · Demo"]},
+    {"code":"DEMO_PD","name":"La Liga · Demo","teams":["Real Madrid · Demo","Barcelona · Demo","Atletico · Demo","Sevilla · Demo","Villarreal · Demo","Athletic Club · Demo"]}
+  ]
+}
