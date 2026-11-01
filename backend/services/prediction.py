@@ -88,15 +88,19 @@ def calculate(home_id, away_id, history, elo_weight=0.18):
     xa = max(0.2, min(4.5, xa))
     ph, pa = goals(xh), goals(xa)
     probs = dict.fromkeys(OUTCOMES, 0.0)
-    over = btts = total = 0.0
+    over15 = over25 = over35 = btts = total = 0.0
     best = (0, 0, 0.0)
     for h, hprob in enumerate(ph):
         for a, aprob in enumerate(pa):
             p = hprob * aprob
             total += p
             probs[outcome(h, a)] += p
+            if h + a > 1:
+                over15 += p
             if h + a > 2:
-                over += p
+                over25 += p
+            if h + a > 3:
+                over35 += p
             if h > 0 and a > 0:
                 btts += p
             if p > best[2]:
@@ -114,8 +118,17 @@ def calculate(home_id, away_id, history, elo_weight=0.18):
         "probabilities": probs,
         "expected_goals": {"home": xh, "away": xa},
         "scoreline": f"{best[0]}–{best[1]}",
-        "over25": over / total,
-        "under25": 1 - over / total,
+        "scoreline_probability": best[2] / total,
+        "goal_lines": {
+            "over_1_5": over15 / total,
+            "under_1_5": 1 - over15 / total,
+            "over_2_5": over25 / total,
+            "under_2_5": 1 - over25 / total,
+            "over_3_5": over35 / total,
+            "under_3_5": 1 - over35 / total,
+        },
+        "over25": over25 / total,
+        "under25": 1 - over25 / total,
         "btts": btts / total,
         "outcome": winner,
         "confidence": confidence,
@@ -129,6 +142,7 @@ def calculate(home_id, away_id, history, elo_weight=0.18):
             f"Elo ratings are {ratings[home_id]:.0f} versus {ratings[away_id]:.0f}; form points per match are {hp:.2f} versus {ap:.2f}.",
             f"{len(h2h)} earlier head-to-head meetings contribute a capped adjustment of {h2h_edge:+.3f}.",
             f"The independent Poisson model estimates {xh:.2f} and {xa:.2f} goals. {winner} is the largest outcome probability ({probs[winner]:.1%}).",
+            f"Most likely exact score: {best[0]}–{best[1]} ({best[2] / total:.1%}); goal-line probabilities come from the full score distribution.",
             "Confidence is a probability-and-sample-size label, not a calibrated guarantee. Injuries, lineups and red cards are not modeled.",
         ],
         "assumptions": "Independent goals; stable recent strength; league priors 1.45 home / 1.15 away for sparse data.",

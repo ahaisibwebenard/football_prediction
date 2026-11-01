@@ -57,13 +57,19 @@ def refresh(db):
             continue
         try:
             data = fetch_competition(code, key)
+            competition = data.get("competition", {})
+            country = competition.get("area", {}).get("name")
             league = db.scalar(select(League).where(League.code == code))
             if not league:
                 league = League(
-                    code=code, name=data.get("competition", {}).get("name", code)
+                    code=code,
+                    name=competition.get("name", code),
+                    country=country,
                 )
                 db.add(league)
                 db.flush()
+            elif country:
+                league.country = country
             for row in sorted(data.get("matches", []), key=lambda r: r["utcDate"]):
                 if not row.get("homeTeam", {}).get("id") or not row.get(
                     "awayTeam", {}

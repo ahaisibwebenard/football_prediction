@@ -27,8 +27,8 @@ router = APIRouter(prefix="/api", dependencies=[Depends(identity)], tags=["Footb
 def catalog(user=Depends(identity), db=Depends(get_db, scope="function")):
     return {
         "leagues": [
-            {"id": x.id, "name": x.name, "code": x.code}
-            for x in db.scalars(select(League).order_by(League.name))
+            {"id": x.id, "name": x.name, "code": x.code, "country": x.country}
+            for x in db.scalars(select(League).order_by(League.country, League.name))
         ],
         "teams": [
             {
@@ -80,6 +80,66 @@ def matches(
 @router.get("/matches/{mid}")
 def match(mid: int, user=Depends(identity), db=Depends(get_db, scope="function")):
     return match_json(db, require(db, Match, mid), user.id, True)
+
+
+@router.get("/predictions/top")
+def top_predictions(user=Depends(identity), db=Depends(get_db, scope="function")):
+    matches = list(
+        db.scalars(
+            select(Match)
+            .join(Prediction, Prediction.match_id == Match.id)
+            .where(
+                Match.source == "live",
+                Match.status == "SCHEDULED",
+                Match.kickoff > now(),
+                Prediction.eligible.is_(True),
+            )
+            .order_by(Match.kickoff)
+            .limit(500)
+        )
+    )
+    ranked = []
+    for fixture in matches:
+        prediction = db.scalar(
+            select(Prediction).where(Prediction.match_id == fixture.id)
+        )
+        data = json.loads(prediction.payload)
+        markets = {
+            "Home win": data["probabilities"]["Home"],
+            "Draw": data["probabilities"]["Draw"],
+            "Away win": data["probabilities"]["Away"],
+            "Both teams to score": data["btts"],
+            "At least one clean sheet": 1 - data["btts"],
+        }
+        for key, label in (
+            ("over_1_5", "Over 1.5 goals"),
+            ("under_1_5", "Under 1.5 goals"),
+            ("over_2_5", "Over 2.5 goals"),
+            ("under_2_5", "Under 2.5 goals"),
+            ("over_3_5", "Over 3.5 goals"),
+            ("under_3_5", "Under 3.5 goals"),
+        ):
+            if key in data.get("goal_lines", {}):
+                markets[label] = data["goal_lines"][key]
+        market, probability = max(markets.items(), key=lambda item: item[1])
+        sample_size = sum(data["sample_sizes"][team] for team in ("home", "away"))
+        ranked.append(
+            (
+                probability,
+                sample_size,
+                fixture.kickoff,
+                {
+                    **match_json(db, fixture, user.id),
+                    "best_market": market,
+                    "best_market_probability": probability,
+                },
+            )
+        )
+    ranked.sort(key=lambda row: (-row[0], -row[1], row[2]))
+    items = [row[3] for row in ranked[:10]]
+    for rank, item in enumerate(items, start=1):
+        item["rank"] = rank
+    return {"items": items, "eligible_live_fixtures": len(ranked)}
 
 
 @router.post("/matches/{mid}/pick")

@@ -4,13 +4,14 @@ import {layout} from './components/layout.js';
 import {toast,empty,esc} from './components/ui.js';
 import {authPage} from './pages/auth.js';
 import {dashboard} from './pages/dashboard.js';
+import {topPredictionsPage} from './pages/top-predictions.js';
 import {matchPage} from './pages/match.js';
 import {historyPage,favoritesPage,leaderboardPage,notificationsPage} from './pages/community.js';
 import {profilePage} from './pages/profile.js';
 import {adminOverview,adminUsers,adminAudit,adminSettings,adminCatalog} from './pages/admin.js';
 
 window.toggleTheme=()=>{const next=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=next;try{localStorage.setItem('predictpro-theme',next);}catch(e){/* Theme still changes in private storage modes. */}};
-try{document.documentElement.dataset.theme=localStorage.getItem('predictpro-theme')||'dark';}catch(e){/* Default theme is usable without local storage. */}
+try{document.documentElement.dataset.theme=localStorage.getItem('predictpro-theme')||'light';}catch(e){/* Default theme is usable without local storage. */}
 window.showError=e=>toast(e.message,true);
 document.querySelector('#dialog-close').onclick=()=>document.querySelector('#dialog').close();
 let rendering=false,queued=false;
@@ -30,7 +31,7 @@ async function route(){
   if(state.impersonating)document.querySelector('#return-admin').onclick=async()=>{try{const s=await send('/admin/return');state.user=s.user;state.impersonating=false;go('admin');}catch(e){toast(e.message,true);}};
   const main=document.querySelector('#main');main.innerHTML='<div class="skeleton"></div><div class="match-grid"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>';
   if(!state.user.must_change)state.catalog=await api('/catalog');
-  const pages={'dashboard':dashboard,'history':historyPage,'favorites':favoritesPage,'leaderboard':leaderboardPage,'notifications':notificationsPage,'profile':profilePage,'admin':adminOverview,'admin/users':adminUsers,'admin/audit':adminAudit,'admin/settings':adminSettings,'admin/catalog':adminCatalog};
+  const pages={'dashboard':dashboard,'top-predictions':topPredictionsPage,'history':historyPage,'favorites':favoritesPage,'leaderboard':leaderboardPage,'notifications':notificationsPage,'profile':profilePage,'admin':adminOverview,'admin/users':adminUsers,'admin/audit':adminAudit,'admin/settings':adminSettings,'admin/catalog':adminCatalog};
   if(path.startsWith('match/'))await matchPage(main,Number(path.split('/')[1]));
   else if(pages[path])await pages[path](main);
   else main.innerHTML=empty('Page not found','Choose a page from the navigation.');

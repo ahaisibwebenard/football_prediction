@@ -61,6 +61,7 @@ class League(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(100), unique=True)
     code: Mapped[str] = mapped_column(String(12), unique=True)
+    country: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
 
 class Team(Base):

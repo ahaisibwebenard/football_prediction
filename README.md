@@ -1,6 +1,6 @@
 # PredictPro
 
-Explainable football probabilities, match analysis, community picks, and an audited administration panel.
+Live football fixtures, explainable match and goal probabilities, a ranked Hottest 10 page, community picks, and an audited administration panel.
 
 **Stack:** Python 3.12+, FastAPI, SQLAlchemy, SQLite, Alembic, native JavaScript ES modules, responsive CSS, and locally bundled Chart.js 4.4.8. The frontend uses the clean HTML/CSS/JavaScript option in the specification. FastAPI serves both frontend and API from one origin, so no Node installation, frontend build, CORS configuration, or second server is required.
 
@@ -67,7 +67,9 @@ Linux/macOS equivalents use `.venv/bin/python`. Run one web worker with SQLite. 
 
 ## Model and interpretation
 
-The independent Poisson goal model calculates a score grid for 0–24 goals per team, normalizes its numerical mass, and aggregates Home/Draw/Away, Over/Under 2.5 and Both Teams To Score probabilities. The modal scoreline is the single most probable score cell, which can differ from the most probable overall outcome.
+The independent Poisson goal model calculates a score grid for 0–24 goals per team, normalizes its numerical mass, and derives Home/Draw/Away, Over/Under 1.5, 2.5 and 3.5, Both Teams To Score, expected goals, and the most likely exact score probabilities. The **Hottest 10** page ranks upcoming provider-sourced fixtures by their strongest estimated result or goals market; it is a probability ranking, not a guarantee or betting-value claim. Competitions are labeled and sorted by the provider's country/area metadata.
+
+Corner forecasts are intentionally not shown: football-data.org's configured competition-match feed does not provide the historical match corner counts needed to estimate them responsibly. No corner data is invented. Other player or match-stat markets are likewise omitted unless a data provider supplies suitable historical inputs.
 
 Features use only real completed matches in the same competition and data source with kickoff strictly earlier than the target fixture, within a two-year window. Synthetic test fixtures are excluded from model calibration and are never seeded for normal app use.
 
