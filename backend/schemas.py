@@ -64,6 +64,14 @@ class PickInput(BaseModel):
 class LeagueInput(BaseModel):
     name: str = Field(min_length=2, max_length=100, pattern=r"^[^<>]+$")
     code: str = Field(pattern=r"^[A-Z0-9_]{2,12}$")
+    country: str | None = Field(default=None, min_length=2, max_length=100)
+
+    @field_validator("country", mode="before")
+    @classmethod
+    def blank_country_is_missing(cls, value):
+        if value is None or not str(value).strip():
+            return None
+        return str(value).strip()
 
 
 class TeamInput(BaseModel):

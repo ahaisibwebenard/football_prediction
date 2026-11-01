@@ -16,6 +16,10 @@ def test_poisson_distribution():
     p = calculate(1, 2, [])
     assert abs(sum(p["probabilities"].values()) - 1) < 1e-9
     assert abs(p["over25"] + p["under25"] - 1) < 1e-9
+    assert abs(p["goal_lines"]["over_1_5"] + p["goal_lines"]["under_1_5"] - 1) < 1e-9
+    assert p["goal_lines"]["over_1_5"] >= p["goal_lines"]["over_2_5"]
+    assert p["goal_lines"]["over_2_5"] >= p["goal_lines"]["over_3_5"]
+    assert 0 < p["scoreline_probability"] < 1
     assert 0 <= p["btts"] <= 1
     assert p["expected_goals"]["home"] > p["expected_goals"]["away"]
     assert p["confidence"] == "Low" and len(p["explanation"]) >= 5
@@ -125,11 +129,16 @@ def test_catalog_crud_and_settings(client):
     h = login(client)
     r = client.post(
         "/api/admin/leagues",
-        json={"name": "Uganda Test League", "code": "UG_TEST"},
+        json={"name": "Uganda Test League", "code": "UG_TEST", "country": "Uganda"},
         headers=h,
     )
     assert r.status_code == 201
     lid = r.json()["id"]
+    assert any(
+        row["country"] == "Uganda"
+        for row in client.get("/api/catalog").json()["leagues"]
+        if row["id"] == lid
+    )
     r = client.post(
         "/api/admin/teams",
         json={"name": "Kabale Test Team", "league_id": lid},
@@ -168,7 +177,7 @@ def test_live_ingestion_and_filters(client, monkeypatch):
     monkeypatch.setenv("FOOTBALL_COMPETITIONS", "PL")
     future = (datetime.now(timezone.utc) + timedelta(days=5)).isoformat()
     payload = {
-        "competition": {"name": "Premier League"},
+        "competition": {"name": "Premier League", "area": {"name": "England"}},
         "matches": [
             {
                 "id": 900001,
@@ -187,6 +196,11 @@ def test_live_ingestion_and_filters(client, monkeypatch):
     assert client.post("/api/admin/sync", json={}, headers=h).json()["synced"] == 1
     rows = client.get("/api/matches?search=Live%20Home").json()["items"]
     assert len(rows) == 1 and rows[0]["source"] == "live" and rows[0]["eligible"]
+    assert rows[0]["country"] == "England"
+    hot = client.get("/api/predictions/top").json()
+    assert len(hot["items"]) == 1
+    assert hot["items"][0]["best_market_probability"] > 0
+    assert hot["items"][0]["best_market"]
     tid = rows[0]["home_id"]
     lid = rows[0]["league_id"]
     assert len(client.get(f"/api/matches?team={tid}&league={lid}").json()["items"]) == 1

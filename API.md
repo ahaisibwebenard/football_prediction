@@ -9,7 +9,7 @@ Errors use `{"detail":"message"}` or a validation array of `loc`/`msg`. Status c
 | Method | Path | Request / purpose |
 |---|---|---|
 | GET | `/health` | Health check |
-| GET | `/site` | Site name only; no secrets |
+| GET | `/site` | Site name and whether live football data is configured; no secrets |
 | POST | `/auth/signup` | `{name,email,username,password}`; role always USER |
 | POST | `/auth/login` | `{login,password}`; login accepts email or username |
 | POST | `/auth/forgot` | `{email}`; generic response |
@@ -25,9 +25,10 @@ Names are 2–80 plain-text characters. Usernames use 3–30 letters, digits or 
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/catalog` | Leagues, teams and account's favorite flags |
+| GET | `/catalog` | Country-sorted leagues (with country), teams and account's favorite flags |
 | GET | `/matches` | Filters: `league`, `date` (UTC YYYY-MM-DD), `team`, `search`, `status` (SCHEDULED/FINISHED/ALL), `limit` (1–100), `offset`; returns `{items,total}` |
 | GET | `/matches/{id}` | Match, stored prediction and prior head-to-head |
+| GET | `/predictions/top` | Top 10 upcoming provider-sourced fixtures, ranked by each fixture's strongest estimated result/goals market |
 | POST | `/matches/{id}/pick` | `{outcome:"Home"}` or Draw/Away; update until kickoff |
 | POST | `/matches/{id}/follow` | Toggle following; new follows close at kickoff |
 | POST | `/favorites/{team_id}` | Toggle favorite |
@@ -37,7 +38,7 @@ Names are 2–80 plain-text characters. Usernames use 3–30 letters, digits or 
 | POST | `/notifications/{id}/read` | Mark an owned notification read |
 | GET | `/metrics` | Source-separated accuracy, Brier loss and prospective trend |
 
-Match timestamps returned by the API are UTC without an offset suffix; the supplied frontend appends `Z` before converting to local time. Match writes require an explicit timezone, such as `2026-11-01T15:00:00Z`. Form guides are oldest-to-newest. Probability fields are numbers in [0,1], not percentages. Notifications are generated during result ingestion or administrator result entry.
+Match timestamps returned by the API are UTC without an offset suffix; the supplied frontend appends `Z` before converting to local time. Match writes require an explicit timezone, such as `2026-11-01T15:00:00Z`. Form guides are oldest-to-newest. Probability fields are numbers in [0,1], not percentages. Stored forecasts include 1X2, expected goals, modal score probability, goal lines, and both-teams-to-score probabilities. Corner probabilities are not available because the configured provider does not supply historical corner counts. Notifications are generated during result ingestion or administrator result entry.
 
 ## ADMIN only
 
@@ -55,11 +56,11 @@ Match timestamps returned by the API are UTC without an offset suffix; the suppl
 | POST | `/admin/users/{id}/impersonate` | Active normal USER only; audited |
 | POST | `/admin/return` | Impersonated session only; return to original administrator |
 | GET | `/admin/audit` | Latest 100 audit records; `offset` |
-| POST | `/admin/sync` | Import configured competitions; offline fallback |
+| POST | `/admin/sync` | Import configured competitions; reports unavailable data without synthetic fallback |
 | POST | `/admin/retrain` | Walk-forward Elo multiplier calibration |
 | GET | `/admin/settings` | Site name, maintenance, API-key configured flag |
 | PUT | `/admin/settings` | `{site_name,maintenance,api_key?}`; omit key to retain, empty string to disable |
-| POST / PUT | `/admin/leagues` / `/admin/leagues/{id}` | `{name,code}` |
+| POST / PUT | `/admin/leagues` / `/admin/leagues/{id}` | `{name,code,country?}` |
 | DELETE | `/admin/leagues/{id}` | Delete if unreferenced |
 | POST / PUT | `/admin/teams` / `/admin/teams/{id}` | `{name,league_id}` |
 | DELETE | `/admin/teams/{id}` | Delete if unreferenced |

@@ -21,8 +21,12 @@ def match_json(db, m, user_id=None, detail=False):
             "source",
         )
     }
+    league = db.get(League, m.league_id)
     result.update(
-        home=home.name, away=away.name, league=db.get(League, m.league_id).name
+        home=home.name,
+        away=away.name,
+        league=league.name,
+        country=league.country,
     )
     result["prediction"] = json.loads(p.payload) if p else None
     result["prediction_id"] = p.id if p else None
