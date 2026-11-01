@@ -25,7 +25,7 @@
 | Match details, Chart.js chart, form and H2H | Yes | Data service covered; chart syntax/assets checked, browser rendering unverified |
 | Prediction history | Yes | History endpoint covered; 50-record pagination |
 | Favorite teams | Yes | Toggle and persistence tested |
-| User picks and prediction-model leaderboard | Yes | Pick closure tested; correct-outcome points computed after final results |
+| System-only match and goals forecasts | Yes | Daily top-ten endpoint ranks unique fixtures and shows result, goal-line, BTTS and score probabilities |
 | Profile and password changes | Yes | Profile and recovery tested; password rotation in first-login tests |
 | Followed-match notifications | Yes | Duplicate-safe result notifications and mark-read tested; UI polls every 60 seconds |
 | Admin overview with charts/activity | Yes | Protected overview endpoint tested; chart presentation unverified |
@@ -49,11 +49,11 @@
 2. Set a new administrator password. Open Match center. Switch theme, resize to phone/tablet/desktop widths and operate the mobile menu using keyboard and pointer.
 3. After configuring the football-data.org API key and waiting for sync, filter by country, live league, team and UTC date. Open a match and compare the numerical probabilities with its Chart.js bars. Inspect goal lines, form, earlier meetings and the full explanation.
 4. Open **Hottest 10**. Verify only upcoming provider fixtures appear, inspect the strongest market rankings, and confirm the corner-data limitation is visible.
-5. Create a USER account. Submit a pick, follow an upcoming match and favorite a team. Reload to confirm persistence. Edit profile and change password.
+5. Create a USER account. Follow an upcoming match and favorite a team. Reload to confirm persistence. Edit profile and change password; users view system forecasts and do not submit picks.
 6. Test Forgot password. Open the new development email under backend/outbox, follow its link, reset, then confirm the link cannot be reused.
 7. As admin, search/view/edit the user. Generate a recovery link or temporary password. Suspend the user and verify they cannot continue; activate/unlock and verify access returns.
-8. Log in as the active normal user. Confirm the banner, denied admin routes, blocked password/pick actions, then Return to admin. Inspect audit entries.
-9. Create a manual league, two teams and a fixture with kickoff a few minutes ahead. As USER, follow it and submit a pick before kickoff. After kickoff, enter a final score as admin, retaining its kickoff and participant IDs. Return as USER; verify the notification, leaderboard points, history and manual-source accuracy. Never adjust a past kickoff merely to make an old pick count.
+8. Log in as the active normal user. Confirm the banner, denied admin routes, blocked password changes, then Return to admin. Inspect audit entries.
+9. Create a manual league, two teams and a fixture with kickoff a few minutes ahead. As USER, follow it. After kickoff, enter a final score as admin, retaining its kickoff and participant IDs. Return as USER; verify the notification and prediction history. Never adjust a past kickoff to create a prospective forecast.
 10. Exercise admin match/team/league create/edit/delete. A referenced team/league delete should return a clear conflict. Read the confirmation before permanently deleting a match and its picks.
 11. Enable maintenance. USER features should show maintenance; admin retains controls. Disable it. Change the site name and reload to verify the header and document title.
 12. Configure a valid provider key. Verify the automatic sync imports real fixtures with source `live`; review provider-plan errors in the admin sync report. Calibrate and inspect its walk-forward report; existing match predictions must remain frozen.

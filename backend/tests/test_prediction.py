@@ -72,15 +72,9 @@ def test_history_cannot_read_future_results(client, db):
     assert calculate(m.home_id, m.away_id, history_for(db, m)) == original
 
 
-def test_pick_deadline_follow_and_notification(client, db):
+def test_follow_and_notification_without_user_picks(client, db):
     h, u = signup(client)
     m = db.scalar(select(Match).where(Match.status == "SCHEDULED"))
-    assert (
-        client.post(
-            f"/api/matches/{m.id}/pick", json={"outcome": "Home"}, headers=h
-        ).status_code
-        == 200
-    )
     assert (
         client.post(f"/api/matches/{m.id}/follow", json={}, headers=h).status_code
         == 200
@@ -94,12 +88,6 @@ def test_pick_deadline_follow_and_notification(client, db):
     notify_result(db, m)
     notify_result(db, m)
     db.commit()
-    assert (
-        client.post(
-            f"/api/matches/{m.id}/pick", json={"outcome": "Away"}, headers=h
-        ).status_code
-        == 409
-    )
     rows = client.get("/api/notifications").json()
     assert len(rows) == 1
     assert (
@@ -197,10 +185,15 @@ def test_live_ingestion_and_filters(client, monkeypatch):
     rows = client.get("/api/matches?search=Live%20Home").json()["items"]
     assert len(rows) == 1 and rows[0]["source"] == "live" and rows[0]["eligible"]
     assert rows[0]["country"] == "England"
-    hot = client.get("/api/predictions/top").json()
+    hot = client.get("/api/predictions/top?date=" + future[:10]).json()
     assert len(hot["items"]) == 1
+    assert hot["date"] == future[:10]
     assert hot["items"][0]["best_market_probability"] > 0
     assert hot["items"][0]["best_market"]
+    markets = hot["items"][0]["markets"]
+    assert abs(markets["goals"]["over_2_5"] + markets["goals"]["under_2_5"] - 1) < 1e-9
+    assert abs(markets["both_teams_to_score"]["yes"] + markets["both_teams_to_score"]["no"] - 1) < 1e-9
+    assert client.get("/api/predictions/top?date=2000-01-01").json()["items"] == []
     tid = rows[0]["home_id"]
     lid = rows[0]["league_id"]
     assert len(client.get(f"/api/matches?team={tid}&league={lid}").json()["items"]) == 1

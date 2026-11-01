@@ -1,6 +1,6 @@
 # PredictPro
 
-Live football fixtures, explainable match and goal probabilities, a ranked Hottest 10 page, community picks, and an audited administration panel.
+Live football fixtures, explainable match and goal probabilities, a daily Hottest 10 forecast page, and an audited administration panel.
 
 **Stack:** Python 3.12+, FastAPI, SQLAlchemy, SQLite, Alembic, native JavaScript ES modules, responsive CSS, and locally bundled Chart.js 4.4.8. The frontend uses the clean HTML/CSS/JavaScript option in the specification. FastAPI serves both frontend and API from one origin, so no Node installation, frontend build, CORS configuration, or second server is required.
 
@@ -93,7 +93,7 @@ Predictions are immutable snapshots; result reconciliation updates evaluation fi
 
 **Administrator recovery:** Manage users offers a one-time link, a randomly generated temporary password, and activation/unlock. Temporary passwords are displayed once, stored only as bcrypt hashes, and require a change after login. Recovery revokes existing sessions. Existing reset tokens are invalidated when replaced or when a password changes.
 
-**Impersonation:** “Log in as” is available for active USER accounts that have no lock or forced password change. A prominent banner identifies the user and offers **Return to admin**. The signed token binds the impersonation to the original administrator's active session and account version. Admin routes, password changes and competitive picks are blocked during impersonation. Start and return are audited. A revoked or demoted administrator loses the ability to continue that impersonation. If a target is suspended during support, the administrator can sign in normally again.
+**Impersonation:** “Log in as” is available for active USER accounts that have no lock or forced password change. A prominent banner identifies the user and offers **Return to admin**. The signed token binds the impersonation to the original administrator's active session and account version. Admin routes and password changes are blocked during impersonation. Start and return are audited. A revoked or demoted administrator loses the ability to continue that impersonation. If a target is suspended during support, the administrator can sign in normally again.
 
 **Audit:** sensitive admin operations record actor identity, action, target, UTC timestamp, and request IP. Passwords, reset tokens and API-key contents are omitted. Audit rows survive account deletion. The panel does not offer log deletion. These are application audit records, not a tamper-proof external ledger.
 
@@ -119,7 +119,7 @@ Linux/macOS:
 .venv/bin/python -m pytest backend/tests -q
 ```
 
-Tests use their own SQLite test database and never the configured production database. They cover password hashing, forced first-login change, logout revocation, roles, CSRF/origin checks, validation, injection-shaped searches, login locks and rate limits, recovery expiry and reuse, recovery session revocation, user management, profile/favorites, audited impersonation/return, last-admin protection, probability normalization, snapshot integrity, chronological feature isolation, pick deadlines, duplicate-safe notifications, catalog constraints, maintenance, mocked live ingestion and offline fallback.
+Tests use their own SQLite test database and never the configured production database. They cover password hashing, forced first-login change, logout revocation, roles, CSRF/origin checks, validation, injection-shaped searches, login locks and rate limits, recovery expiry and reuse, recovery session revocation, user management, profile/favorites, audited impersonation/return, last-admin protection, probability normalization, snapshot integrity, chronological feature isolation, duplicate-safe notifications, catalog constraints, maintenance, mocked live ingestion, daily forecast markets, and no-demo fallback.
 
 Optional first-party JavaScript syntax checks require Node 20+ (Node is not needed to run the app):
 
