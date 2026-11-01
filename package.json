@@ -1,0 +1,1 @@
+{"name":"predictpro","version":"1.0.0","private":true,"type":"module","scripts":{"dev":"python -m backend.preview","check":"python scripts/check_frontend.py","test":"python -m pytest backend/tests -q"}}
