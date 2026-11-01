@@ -57,10 +57,6 @@ class StateInput(BaseModel):
     suspended: bool
 
 
-class PickInput(BaseModel):
-    outcome: Literal["Home", "Draw", "Away"]
-
-
 class LeagueInput(BaseModel):
     name: str = Field(min_length=2, max_length=100, pattern=r"^[^<>]+$")
     code: str = Field(pattern=r"^[A-Z0-9_]{2,12}$")

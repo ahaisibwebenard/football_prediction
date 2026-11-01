@@ -29,11 +29,9 @@ Names are 2–80 plain-text characters. Usernames use 3–30 letters, digits or 
 | GET | `/matches` | Filters: `league`, `date` (UTC YYYY-MM-DD), `team`, `search`, `status` (SCHEDULED/FINISHED/ALL), `limit` (1–100), `offset`; returns `{items,total}` |
 | GET | `/matches/{id}` | Match, stored prediction and prior head-to-head |
 | GET | `/predictions/top` | Top 10 upcoming provider-sourced fixtures, ranked by each fixture's strongest estimated result/goals market |
-| POST | `/matches/{id}/pick` | `{outcome:"Home"}` or Draw/Away; update until kickoff |
 | POST | `/matches/{id}/follow` | Toggle following; new follows close at kickoff |
 | POST | `/favorites/{team_id}` | Toggle favorite |
 | GET | `/history` | Stored predictions; 50 per page, `offset` |
-| GET | `/leaderboard` | 3 points per correct completed outcome; AI source rows separate |
 | GET | `/notifications` | Latest 100 account notifications |
 | POST | `/notifications/{id}/read` | Mark an owned notification read |
 | GET | `/metrics` | Source-separated accuracy, Brier loss and prospective trend |
@@ -65,7 +63,7 @@ Match timestamps returned by the API are UTC without an offset suffix; the suppl
 | POST / PUT | `/admin/teams` / `/admin/teams/{id}` | `{name,league_id}` |
 | DELETE | `/admin/teams/{id}` | Delete if unreferenced |
 | POST / PUT | `/admin/matches` / `/admin/matches/{id}` | Match body below |
-| DELETE | `/admin/matches/{id}` | Delete with related predictions, picks and notifications |
+| DELETE | `/admin/matches/{id}` | Delete with related forecasts, legacy picks and notifications |
 
 Example match write (use existing team and league IDs from `/catalog`):
 
@@ -83,4 +81,4 @@ Example match write (use existing team and league IDs from `/catalog`):
 
 For a completed match, use status FINISHED, a past kickoff and both nonnegative integer scores. POST creates manual-source fixtures. PUT retains the existing source and participants. Participant/competition changes require deleting and recreating the fixture; this prevents reusing another match's snapshot. Participant IDs need not belong to one league, allowing cross-league competitions. Upcoming fixtures created through the admin API receive an immediate frozen prediction. Past matches added after the event do not get a fabricated prospective score.
 
-The current administrator cannot delete/suspend themselves through user-management routes. At least one active administrator must remain. Maintenance blocks USER feature endpoints while preserving login, password change, logout and administrator access. Impersonated sessions never gain ADMIN permissions and cannot change passwords or submit competitive picks.
+The current administrator cannot delete/suspend themselves through user-management routes. At least one active administrator must remain. Maintenance blocks USER feature endpoints while preserving login, password change, logout and administrator access. Impersonated sessions never gain ADMIN permissions or change passwords.

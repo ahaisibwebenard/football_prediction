@@ -251,7 +251,14 @@ def test_user_management_profile_favorites_and_reset_link(client):
         is True
     )
     assert client.get("/api/history").status_code == 200
-    assert client.get("/api/leaderboard").status_code == 200
+    assert client.get("/api/leaderboard").status_code == 404
+    assert (
+        client.post(
+            "/api/matches/1/pick", json={"outcome": "Home"}, headers=ph
+        ).status_code
+        == 404
+    )
+    assert client.get("/api/predictions/top").status_code == 200
     h = login(client, password="Admin-secure-2026!")
     assert client.delete("/api/admin/users/" + str(uid), headers=h).status_code == 200
     assert client.get("/api/admin/users/" + str(uid)).status_code == 404

@@ -1,6 +1,6 @@
 import json
 from sqlalchemy import select
-from backend.models.entities import Team, League, Match, Prediction, Follow, Pick
+from backend.models.entities import Team, League, Match, Prediction, Follow
 from backend.services.prediction import history_for
 
 
@@ -36,10 +36,6 @@ def match_json(db, m, user_id=None, detail=False):
     result["prediction_created_at"] = p.created_at if p else None
     if user_id:
         result["following"] = db.get(Follow, (user_id, m.id)) is not None
-        pick = db.scalar(
-            select(Pick).where(Pick.user_id == user_id, Pick.match_id == m.id)
-        )
-        result["pick"] = pick.outcome if pick else None
     if detail:
         rows = [
             x

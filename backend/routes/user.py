@@ -1,4 +1,5 @@
 import json
+from datetime import date as date_type, datetime, time, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from sqlalchemy import select, func
 from backend.db import get_db
@@ -6,19 +7,15 @@ from backend.middleware.auth import identity
 from backend.controllers.common import require
 from backend.controllers.matches import match_json
 from backend.models.entities import (
-    User,
     Match,
     Team,
     League,
-    Pick,
     Favorite,
     Follow,
     Notification,
     Prediction,
     now,
 )
-from backend.schemas import PickInput
-from backend.services.prediction import outcome
 
 router = APIRouter(prefix="/api", dependencies=[Depends(identity)], tags=["Football"])
 
@@ -54,24 +51,26 @@ def matches(
     user=Depends(identity),
     db=Depends(get_db, scope="function"),
 ):
-    q = select(Match)
+    query = select(Match)
     if status != "ALL":
-        q = q.where(Match.status == status)
+        query = query.where(Match.status == status)
     if league:
-        q = q.where(Match.league_id == league)
+        query = query.where(Match.league_id == league)
     if team:
-        q = q.where((Match.home_id == team) | (Match.away_id == team))
+        query = query.where((Match.home_id == team) | (Match.away_id == team))
     if date:
-        q = q.where(func.date(Match.kickoff) == date)
+        query = query.where(func.date(Match.kickoff) == date)
     if search:
         ids = select(Team.id).where(Team.name.icontains(search, autoescape=True))
-        q = q.where(Match.home_id.in_(ids) | Match.away_id.in_(ids))
-    total = db.scalar(select(func.count()).select_from(q.subquery()))
-    q = q.order_by(Match.kickoff.desc() if status == "FINISHED" else Match.kickoff)
+        query = query.where(Match.home_id.in_(ids) | Match.away_id.in_(ids))
+    total = db.scalar(select(func.count()).select_from(query.subquery()))
+    query = query.order_by(
+        Match.kickoff.desc() if status == "FINISHED" else Match.kickoff
+    )
     return {
         "items": [
-            match_json(db, m, user.id)
-            for m in db.scalars(q.limit(limit).offset(offset))
+            match_json(db, match, user.id)
+            for match in db.scalars(query.limit(limit).offset(offset))
         ],
         "total": total,
     }
@@ -83,7 +82,14 @@ def match(mid: int, user=Depends(identity), db=Depends(get_db, scope="function")
 
 
 @router.get("/predictions/top")
-def top_predictions(user=Depends(identity), db=Depends(get_db, scope="function")):
+def top_predictions(
+    date: str = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
+    user=Depends(identity),
+    db=Depends(get_db, scope="function"),
+):
+    selected_date = date_type.fromisoformat(date) if date else now().date()
+    day_start = datetime.combine(selected_date, time.min)
+    day_end = day_start + timedelta(days=1)
     matches = list(
         db.scalars(
             select(Match)
@@ -91,6 +97,8 @@ def top_predictions(user=Depends(identity), db=Depends(get_db, scope="function")
             .where(
                 Match.source == "live",
                 Match.status == "SCHEDULED",
+                Match.kickoff >= day_start,
+                Match.kickoff < day_end,
                 Match.kickoff > now(),
                 Prediction.eligible.is_(True),
             )
@@ -108,9 +116,10 @@ def top_predictions(user=Depends(identity), db=Depends(get_db, scope="function")
             "Home win": data["probabilities"]["Home"],
             "Draw": data["probabilities"]["Draw"],
             "Away win": data["probabilities"]["Away"],
-            "Both teams to score": data["btts"],
-            "At least one clean sheet": 1 - data["btts"],
+            "Both teams to score · Yes": data["btts"],
+            "Both teams to score · No": 1 - data["btts"],
         }
+        goal_markets = {}
         for key, label in (
             ("over_1_5", "Over 1.5 goals"),
             ("under_1_5", "Under 1.5 goals"),
@@ -120,7 +129,9 @@ def top_predictions(user=Depends(identity), db=Depends(get_db, scope="function")
             ("under_3_5", "Under 3.5 goals"),
         ):
             if key in data.get("goal_lines", {}):
-                markets[label] = data["goal_lines"][key]
+                probability = data["goal_lines"][key]
+                markets[label] = probability
+                goal_markets[key] = probability
         market, probability = max(markets.items(), key=lambda item: item[1])
         sample_size = sum(data["sample_sizes"][team] for team in ("home", "away"))
         ranked.append(
@@ -132,6 +143,17 @@ def top_predictions(user=Depends(identity), db=Depends(get_db, scope="function")
                     **match_json(db, fixture, user.id),
                     "best_market": market,
                     "best_market_probability": probability,
+                    "markets": {
+                        "result": data["probabilities"],
+                        "goals": goal_markets,
+                        "both_teams_to_score": {
+                            "yes": data["btts"],
+                            "no": 1 - data["btts"],
+                        },
+                        "most_likely_score_probability": data.get(
+                            "scoreline_probability"
+                        ),
+                    },
                 },
             )
         )
@@ -139,33 +161,11 @@ def top_predictions(user=Depends(identity), db=Depends(get_db, scope="function")
     items = [row[3] for row in ranked[:10]]
     for rank, item in enumerate(items, start=1):
         item["rank"] = rank
-    return {"items": items, "eligible_live_fixtures": len(ranked)}
-
-
-@router.post("/matches/{mid}/pick")
-def pick(
-    mid: int,
-    body: PickInput,
-    request: Request,
-    user=Depends(identity),
-    db=Depends(get_db, scope="function"),
-):
-    if request.state.claims.get("actor"):
-        raise HTTPException(403, "Picks are disabled while impersonating.")
-    m = require(db, Match, mid)
-    # Acquire a write lock before checking the deadline and existing pick.
-    from sqlalchemy import update
-
-    db.execute(update(Match).where(Match.id == mid).values(status=Match.status))
-    db.refresh(m)
-    if m.status != "SCHEDULED" or m.kickoff <= now():
-        raise HTTPException(409, "Picks close at kickoff.")
-    p = db.scalar(select(Pick).where(Pick.user_id == user.id, Pick.match_id == mid))
-    if p:
-        p.outcome = body.outcome
-    else:
-        db.add(Pick(user_id=user.id, match_id=mid, outcome=body.outcome))
-    return {"message": "Pick saved. You can change it until kickoff."}
+    return {
+        "date": selected_date.isoformat(),
+        "items": items,
+        "eligible_live_fixtures": len(ranked),
+    }
 
 
 @router.post("/matches/{mid}/follow")
@@ -212,57 +212,6 @@ def history(
         )
     )
     return {"items": [match_json(db, m, user.id) for m in rows], "offset": offset}
-
-
-@router.get("/leaderboard")
-def leaderboard(db=Depends(get_db, scope="function")):
-    results = []
-    for u in db.scalars(select(User).where(User.suspended == False)):
-        pairs = db.execute(
-            select(Pick, Match)
-            .join(Match, Match.id == Pick.match_id)
-            .where(
-                Pick.user_id == u.id,
-                Match.status == "FINISHED",
-                Pick.created_at < Match.kickoff,
-            )
-        ).all()
-        if not pairs:
-            continue
-        hits = sum(p.outcome == outcome(m.home_goals, m.away_goals) for p, m in pairs)
-        results.append(
-            {
-                "name": u.username,
-                "correct": hits,
-                "total": len(pairs),
-                "points": hits * 3,
-                "accuracy": hits / len(pairs),
-                "kind": "user",
-            }
-        )
-    for source in ("live", "sample", "manual"):
-        pairs = db.execute(
-            select(Prediction, Match)
-            .join(Match, Match.id == Prediction.match_id)
-            .where(
-                Prediction.correct.is_not(None),
-                Prediction.eligible == True,
-                Match.source == source,
-            )
-        ).all()
-        if pairs:
-            hits = sum(p.correct for p, m in pairs)
-            results.append(
-                {
-                    "name": f"PredictPro AI · {source}",
-                    "correct": hits,
-                    "total": len(pairs),
-                    "points": hits * 3,
-                    "accuracy": hits / len(pairs),
-                    "kind": "AI",
-                }
-            )
-    return sorted(results, key=lambda x: (-x["points"], -x["accuracy"], x["name"]))
 
 
 @router.get("/notifications")
