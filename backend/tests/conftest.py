@@ -5,6 +5,7 @@ os.environ["JWT_SECRET"] = "tests-use-an-isolated-signing-key-0123456789abcdef"
 os.environ["DATABASE_URL"] = "sqlite:///./test_predictpro.db"
 os.environ["APP_ENV"] = "development"
 os.environ["APP_URL"] = "http://testserver"
+os.environ["FOOTBALL_SYNC_ENABLED"] = "false"
 os.environ["SEED_ADMIN_USERNAME"] = "admin"
 os.environ["SEED_ADMIN_PASSWORD"] = "benard"
 os.environ["SEED_ADMIN_EMAIL"] = "admin@predictpro.local"
@@ -13,7 +14,7 @@ from fastapi.testclient import TestClient
 from backend.main import app
 from backend.db import engine, SessionLocal
 from backend.models.entities import Base
-from backend.seed.seed import main
+from backend.seed.seed import main, seed_sample
 
 
 @pytest.fixture
@@ -21,6 +22,9 @@ def client():
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
     main()
+    with SessionLocal() as session:
+        seed_sample(session)
+        session.commit()
     with TestClient(app) as c:
         yield c
     Base.metadata.drop_all(engine)

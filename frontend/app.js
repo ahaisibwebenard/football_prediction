@@ -18,7 +18,7 @@ async function route(){
  if(rendering){queued=true;return;}rendering=true;
  try{
   const path=location.hash.slice(1)||'dashboard';destroyCharts();document.querySelector('#dialog').close();
-  const metadata=await api('/site');state.siteName=metadata.site_name;document.title=metadata.site_name+' · Football intelligence';
+    const metadata=await api('/site');state.siteName=metadata.site_name;state.liveDataConfigured=metadata.live_data_configured;document.title=metadata.site_name+' · Football intelligence';
   if(['login','signup','forgot','reset'].includes(path.split('?')[0])){authPage(path);return;}
   const session=await api('/auth/me');state.user=session.user;state.impersonating=session.impersonating;
   if(state.user.must_change&&path!=='profile'){go('profile');return;}

@@ -1,5 +1,9 @@
+import asyncio
+import contextlib
 import logging
+import os
 from pathlib import Path
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -7,10 +11,55 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from sqlalchemy.exc import IntegrityError
 from fastapi.exceptions import RequestValidationError
 from fastapi import Depends
-from backend.db import get_db
+from backend.db import get_db, SessionLocal
 from backend.models.entities import Setting
 from backend.config import ROOT, ENV, HOSTS, URL
 from backend.routes import auth, user, admin
+
+
+def sync_live_data():
+    from backend.seed.seed import clear_sample_data
+    from backend.services.football import refresh
+
+    with SessionLocal() as db:
+        removed = clear_sample_data(db)
+        if removed:
+            db.commit()
+        report = refresh(db)
+        db.commit()
+        logging.info(
+            "Football sync source=%s synced=%s",
+            report.get("source"),
+            report.get("synced", 0),
+        )
+
+
+async def live_sync_loop():
+    interval = max(60, int(os.getenv("FOOTBALL_SYNC_INTERVAL_SECONDS", "900")))
+    while True:
+        try:
+            await asyncio.to_thread(sync_live_data)
+        except Exception:
+            logging.exception("Live football sync failed.")
+        await asyncio.sleep(interval)
+
+
+@asynccontextmanager
+async def lifespan(app):
+    enabled = os.getenv("FOOTBALL_SYNC_ENABLED", "true").lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    task = asyncio.create_task(live_sync_loop()) if enabled else None
+    try:
+        yield
+    finally:
+        if task:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+
 
 app = FastAPI(
     title="PredictPro API",
@@ -18,6 +67,7 @@ app = FastAPI(
     docs_url="/api/docs" if ENV != "production" else None,
     redoc_url=None,
     openapi_url="/api/openapi.json" if ENV != "production" else None,
+    lifespan=lifespan,
 )
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=HOSTS)
 
@@ -79,7 +129,12 @@ async def validation(request, exc):
 @app.get("/api/site")
 def site(db=Depends(get_db, scope="function")):
     name = db.get(Setting, "site_name")
-    return {"site_name": name.value if name else "PredictPro"}
+    api_key = db.get(Setting, "api_key")
+    configured_key = api_key.value if api_key else os.getenv("FOOTBALL_API_KEY", "")
+    return {
+        "site_name": name.value if name else "PredictPro",
+        "live_data_configured": bool(configured_key),
+    }
 
 
 app.include_router(auth.router)

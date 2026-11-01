@@ -191,7 +191,11 @@ def retrain(db):
     rows = list(
         db.scalars(
             select(Match)
-            .where(Match.status == "FINISHED", Match.kickoff < now())
+            .where(
+                Match.status == "FINISHED",
+                Match.kickoff < now(),
+                Match.source != "sample",
+            )
             .order_by(Match.kickoff, Match.id)
         )
     )
@@ -231,7 +235,7 @@ def retrain(db):
         "version": BASE_VERSION + "-" + now().strftime("%Y%m%d%H%M%S"),
         "walk_forward_brier": loss,
         "validation_matches": n,
-        "note": "Tuning-set walk-forward score, not independent test accuracy. Includes synthetic data if present. Existing snapshots remain unchanged.",
+        "note": "Tuning-set walk-forward score, not independent test accuracy. Existing snapshots remain unchanged.",
     }
     setting = db.get(Setting, "model")
     if setting:

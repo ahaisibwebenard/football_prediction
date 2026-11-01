@@ -21,6 +21,17 @@ def test_poisson_distribution():
     assert p["confidence"] == "Low" and len(p["explanation"]) >= 5
 
 
+def test_initialization_cleanup_removes_sample_fixtures(client, db):
+    from backend.seed.seed import clear_sample_data
+
+    before = db.scalar(select(Match).where(Match.source == "sample"))
+    assert before is not None
+    removed = clear_sample_data(db)
+    db.commit()
+    assert removed > 0
+    assert db.scalar(select(Match).where(Match.source == "sample")) is None
+
+
 def test_snapshots_no_leakage_and_metrics(client, db):
     m = db.scalar(select(Match).where(Match.status == "SCHEDULED"))
     p = get_prediction(db, m)
@@ -98,13 +109,15 @@ def test_pick_deadline_follow_and_notification(client, db):
 def test_offline_sync_and_calibration(client, db, monkeypatch):
     monkeypatch.delenv("FOOTBALL_API_KEY", raising=False)
     h = login(client)
-    assert (
-        client.post("/api/admin/sync", json={}, headers=h).json()["source"] == "sample"
-    )
+    before = client.get("/api/matches?status=ALL").json()["total"]
+    report = client.post("/api/admin/sync", json={}, headers=h).json()
+    assert report["source"] == "unavailable"
+    assert client.get("/api/matches?status=ALL").json()["total"] == before
     m = db.scalar(select(Match).where(Match.status == "SCHEDULED"))
     snapshot = get_prediction(db, m).payload
     result = client.post("/api/admin/retrain", json={}, headers=h)
-    assert result.status_code == 200 and result.json()["validation_matches"] > 0
+    assert result.status_code == 200
+    assert result.json()["message"].startswith("Need at least 21 earlier results")
     assert get_prediction(db, m).payload == snapshot
 
 
@@ -180,7 +193,7 @@ def test_live_ingestion_and_filters(client, monkeypatch):
     assert client.get("/api/matches?date=" + future[:10]).json()["total"] >= 1
 
 
-def test_live_failure_retains_offline_data(client, monkeypatch):
+def test_live_failure_does_not_add_sample_data(client, monkeypatch):
     import httpx
 
     h = login(client)
@@ -191,6 +204,7 @@ def test_live_failure_retains_offline_data(client, monkeypatch):
         raise httpx.ConnectError("unreachable")
 
     monkeypatch.setattr("backend.services.football.fetch_competition", unavailable)
+    before = client.get("/api/matches?status=ALL").json()["total"]
     result = client.post("/api/admin/sync", json={}, headers=h)
-    assert result.status_code == 200 and result.json()["source"] == "sample"
-    assert client.get("/api/matches").json()["total"] == 12
+    assert result.status_code == 200 and result.json()["source"] == "unavailable"
+    assert client.get("/api/matches?status=ALL").json()["total"] == before

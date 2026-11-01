@@ -43,13 +43,11 @@ def refresh(db):
     saved = db.get(Setting, "api_key")
     key = saved.value if saved else os.getenv("FOOTBALL_API_KEY", "")
     if not key:
-        from backend.seed.seed import seed_sample
-
-        added = seed_sample(db)
         return {
-            "source": "sample",
-            "message": "No API key. Bundled synthetic data retained or loaded; no real results invented.",
-            "added": added,
+            "source": "unavailable",
+            "synced": 0,
+            "errors": [],
+            "message": "No football-data.org API key is configured. Add one in Admin settings or set FOOTBALL_API_KEY; no demo fixtures are generated.",
         }
     count = 0
     errors = []
@@ -128,15 +126,13 @@ def refresh(db):
         select(Match).where(Match.status == "SCHEDULED", Match.kickoff > now())
     ):
         get_prediction(db, m)
-    if not count:
-        from backend.seed.seed import seed_sample
-
-        seed_sample(db)
     return {
-        "source": "live" if count else "sample",
+        "source": "live" if count or not errors else "unavailable",
         "synced": count,
         "errors": errors,
         "message": "Live sync complete."
         if count
-        else "Sync unavailable. Existing bundled data remains usable.",
+        else "No live matches returned by the provider."
+        if not errors
+        else "Live sync failed. Existing records were retained; no demo fixtures were created.",
     }
