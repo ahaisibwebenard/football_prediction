@@ -20,7 +20,7 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-3. Open **http://localhost:8000**. Use this hostname consistently: development CSRF checks expect the `APP_URL` in `.env`, which defaults to `http://localhost:8000`.
+3. Open **http://127.0.0.1:8000**. Use this hostname consistently: development CSRF checks expect the `APP_URL` in `.env`, which defaults to `http://127.0.0.1:8000`.
 4. Sign in with **username `admin` and password `benard`**. The server requires a new password before any protected feature can be used. The new password needs at least 10 characters and at most 72 UTF-8 bytes. The password is bcrypt-hashed in the database; the initial credentials come from `.env`.
 5. Create a normal user through **Create an account** on the sign-in screen, or create one in the administrator's **Manage users** page. Administrator-created users must change their initial password too.
 
@@ -37,23 +37,19 @@ python3 -m venv .venv
 .venv/bin/python -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-The same URL and initial administrator credentials apply. Stop the server with Ctrl+C. Your SQLite file persists in the project directory. Repeating the migration and seed commands preserves existing records and does not reset administrator passwords.
+The same URL and initial administrator credentials apply. Stop the server with Ctrl+C. Your SQLite file persists in the project directory. Repeating the migration and seed commands preserves existing accounts and does not reset administrator passwords.
 
 ## Included data and first use
 
-The seed inserts two **demo** leagues, 12 demo teams, 180 synthetic completed matches, 12 upcoming synthetic fixtures, stored predictions, and exactly one initial administrator if no administrator exists. The fixture generator uses the bundled `backend/seed/sample.json` and a fixed random seed; dates are relative to the day you first seed. Team names explicitly carry “Demo”. Scores and schedules are invented for software demonstration and are not real football records.
-
-The seed does not create fake users, artificial community picks, or fake notifications. The leaderboard starts empty until picks are settled. Notifications start empty until followed matches finish. Existing sample fixtures are not automatically shifted forward by reseeding an existing database.
-
-Historical sample predictions are labeled **retrospective backtests**. Only snapshots recorded while a fixture is scheduled and before kickoff are eligible for prospective accuracy. Live, manual, sample, and retrospective results are reported separately. The initial synthetic backtest percentage is not a claim about predictive skill on real matches.
+Initialization creates the first administrator and site settings; it does not create matches, teams, leagues, predictions, or user activity. It removes previously seeded synthetic matches and their demo leagues. The bundled sample generator exists only for automated tests. No demo fixture is used as a real match or prediction.
 
 ## Live fixtures and results
 
 1. Obtain your own football-data.org API token and confirm which competitions your plan permits.
-2. Set `FOOTBALL_API_KEY` in `.env`, or use **Admin → Site settings**. The form never returns an existing key. An empty saved key disables live sync even if an environment key exists. A blank form field otherwise retains the current key.
-3. `FOOTBALL_COMPETITIONS=PL,PD` selects the competition codes. Adjust it to your subscription. Restart after editing the environment.
-4. Select **Admin overview → Sync football data**. The client uses `/v4/competitions/{code}/matches` with an `X-Auth-Token` header, imports finished results and scheduled fixtures, and deduplicates external IDs. In-play states are not misrepresented as finished. New past results are not given invented prospective predictions.
-5. If there is no key or the provider is unavailable, bundled synthetic data remains usable. The returned sync report identifies errors and the source used. Provider limits, coverage, and current-season history affect the available sample size.
+2. Set `FOOTBALL_API_KEY` in `.env`, or sign in as admin and save it under **Admin → Site settings**. The form never returns an existing key. A saved empty key disables live sync even if an environment key exists; a blank form field retains the current saved key.
+3. `FOOTBALL_COMPETITIONS=PL,PD` selects competition codes. Adjust them to your subscription. The server fetches on startup and every 15 minutes by default (`FOOTBALL_SYNC_INTERVAL_SECONDS`).
+4. The connector uses `/v4/competitions/{code}/matches` with an `X-Auth-Token` header, imports scheduled fixtures and finished results, deduplicates external IDs, and creates forecasts for upcoming matches. In-play, suspended, and unknown statuses are not mislabeled as scheduled or finished.
+5. Without a valid key or if the provider is unavailable, the dashboard shows no live fixtures and the sync report explains the issue. It never substitutes synthetic fixtures. Provider coverage, rate limits, and historical results depend on your API plan.
 
 To sync once from a terminal:
 
@@ -61,19 +57,19 @@ To sync once from a terminal:
 .\.venv\Scripts\python.exe -m backend.worker --once
 ```
 
-For a single persistent sync process, run this in a second terminal:
+The web process refreshes automatically. If you run the optional worker separately, disable the in-process loop with `FOOTBALL_SYNC_ENABLED=false` to avoid duplicate provider requests:
 
 ```powershell
 .\.venv\Scripts\python.exe -m backend.worker --interval 900
 ```
 
-Linux/macOS equivalents use `.venv/bin/python`. Sync is otherwise manual; the web server does not silently launch a scheduler. Follow a match before kickoff to receive its full-time notification when sync or an administrator records the result. The browser polls notifications every 60 seconds while signed in. Notifications are in-app, not email or push alerts.
+Linux/macOS equivalents use `.venv/bin/python`. Run one web worker with SQLite. Follow a match before kickoff to receive its full-time notification when a later sync records the result. The browser polls notifications every 60 seconds while signed in. Notifications are in-app, not email or push alerts.
 
 ## Model and interpretation
 
 The independent Poisson goal model calculates a score grid for 0–24 goals per team, normalizes its numerical mass, and aggregates Home/Draw/Away, Over/Under 2.5 and Both Teams To Score probabilities. The modal scoreline is the single most probable score cell, which can differ from the most probable overall outcome.
 
-Features use only completed matches in the same competition and data source with kickoff strictly earlier than the target fixture, within a two-year window. Live results never mix with synthetic demo results.
+Features use only real completed matches in the same competition and data source with kickoff strictly earlier than the target fixture, within a two-year window. Synthetic test fixtures are excluded from model calibration and are never seeded for normal app use.
 
 - League home and away goal means shrink toward 1.45 and 1.15 using 20 pseudo-matches. The separate rates encode home advantage.
 - Each team's last ten scoring and conceding records shrink toward the league mean using five pseudo-matches. The displayed form guide shows the latest five, oldest first.
@@ -81,7 +77,7 @@ Features use only completed matches in the same competition and data source with
 - Capped Elo, recent points-per-match and up to five earlier head-to-head meetings adjust expected goals. Expected goal means are capped between 0.2 and 4.5 for numerical stability.
 - “Higher”, “Moderate” and “Low” confidence combine the largest outcome probability with recent-match sample counts. These are descriptive labels, not calibrated confidence intervals.
 
-**Calibrate model** performs walk-forward grid selection of the Elo multiplier using multiclass Brier loss on earlier results. It persists a versioned model setting for **new snapshots only**. Existing forecasts remain unchanged. Its report is a tuning-set score, not independent test accuracy, and explicitly identifies the possible inclusion of synthetic data. This is a real explainable statistical model; there is no external LLM or fabricated trained classifier.
+**Calibrate model** performs walk-forward grid selection of the Elo multiplier using real earlier results. It persists a versioned model setting for **new snapshots only**. Existing forecasts remain unchanged. Its report is a tuning-set score, not independent test accuracy. The predictor is an explainable Poisson/Elo statistical model, not a generative AI service; it needs real historical results and does not guarantee outcomes.
 
 Predictions are immutable snapshots; result reconciliation updates evaluation fields. Brier loss is the sum of squared errors across the three outcome probabilities, ranging from 0 to 2; lower is better. Real-world accuracy remains unknown until enough prospective live predictions finish. Injuries, lineups, player availability, weather and correlated goals are not modeled.
 
@@ -129,11 +125,11 @@ Optional first-party JavaScript syntax checks require Node 20+ (Node is not need
 python scripts/check_frontend.py
 ```
 
-See [VERIFICATION.md](VERIFICATION.md) for the 19-test result and smoke checks, and [FEATURE_CHECKLIST.md](FEATURE_CHECKLIST.md) for the acceptance walkthrough and measured limits. Browser visual/keyboard verification was unavailable in the authoring environment because its preview runtime could not access Python. Live HTTP provider calls and actual SMTP delivery require your credentials; tests substitute deterministic provider responses and capture email delivery.
+See [VERIFICATION.md](VERIFICATION.md) for test results and smoke checks, and [FEATURE_CHECKLIST.md](FEATURE_CHECKLIST.md) for the acceptance walkthrough and measured limits. Browser visual/keyboard verification was unavailable in the authoring environment because its preview runtime could not access Python. Live HTTP provider calls and actual SMTP delivery require your credentials; tests substitute deterministic provider responses and capture email delivery.
 
 ## Deployment
 
-**Render:** deploy a Python web service with a persistent disk mounted at `/var/data`. Set `DATABASE_URL=sqlite:////var/data/predictpro.db`, the exact HTTPS `APP_URL`, an explicit `ALLOWED_HOSTS` list, `APP_ENV=production`, a fresh random `JWT_SECRET`, seed credentials and SMTP configuration in the host's environment. Install with `pip install -r requirements.txt`. On the disk-attached instance, migrate and seed before starting:
+**Render:** deploy a Python web service with a persistent disk mounted at `/var/data`. Set `DATABASE_URL=sqlite:////var/data/predictpro.db`, the exact HTTPS `APP_URL`, an explicit `ALLOWED_HOSTS` list, `APP_ENV=production`, a fresh random `JWT_SECRET`, seed credentials, SMTP configuration, `FOOTBALL_API_KEY`, and `FOOTBALL_COMPETITIONS` in the host's environment. Without the provider key, the app intentionally displays no fixtures. Install with `pip install -r requirements.txt`. On the disk-attached instance, migrate and seed before starting:
 
 ```bash
 python -m alembic upgrade head
@@ -141,7 +137,7 @@ python -m backend.seed.seed
 python -m uvicorn backend.main:app --host 0.0.0.0 --port "$PORT" --workers 1
 ```
 
-Run the first two commands only where the mounted database is available, not in an isolated build job. Protect initial access while changing the bootstrap password. Configure scheduled sync on the same instance/filesystem, or invoke **Sync football data** manually. A separate container cannot assume access to the same SQLite disk. Do not use an ephemeral disk for durable data.
+Run the first two commands only where the mounted database is available, not in an isolated build job. Protect initial access while changing the bootstrap password. The single web process syncs configured competitions every 15 minutes. A separate container cannot assume access to the same SQLite disk. Do not use an ephemeral disk for durable data.
 
 **Railway:** use a Python service with a persistent volume, the same database path and environment settings, and the same migration/start sequence. Keep a single replica for SQLite. Review the provider's current volume/backup and startup documentation.
 

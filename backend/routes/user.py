@@ -269,5 +269,5 @@ def model_metrics(db):
     return {
         "groups": groups,
         "trend": trend,
-        "note": "Only predictions frozen before kickoff enter prospective accuracy. Synthetic backtests are separate. Brier score: lower is better (0–2).",
+        "note": "Only predictions frozen before kickoff enter prospective accuracy. Historical backtests are separate. Brier score: lower is better (0–2).",
     }

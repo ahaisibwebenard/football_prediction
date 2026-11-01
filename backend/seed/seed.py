@@ -6,9 +6,21 @@ import random
 import math
 from pathlib import Path
 from datetime import timedelta
-from sqlalchemy import select
+from sqlalchemy import delete, or_, select
 from backend.db import SessionLocal
-from backend.models.entities import User, League, Team, Match, Setting, now
+from backend.models.entities import (
+    User,
+    League,
+    Team,
+    Match,
+    Setting,
+    Favorite,
+    Follow,
+    Notification,
+    Pick,
+    Prediction,
+    now,
+)
 from backend.utils.security import hash_password
 from backend.services.prediction import get_prediction, evaluate
 
@@ -24,7 +36,9 @@ def poisson(rng, lam):
 
 
 def seed_sample(db):
-    data = json.loads(Path(__file__).with_name("sample.json").read_text())
+    data = json.loads(
+        Path(__file__).with_name("sample.json").read_text(encoding="utf-8")
+    )
     rng = random.Random(data["seed"])
     added = 0
     for info in data["leagues"]:
@@ -78,8 +92,42 @@ def seed_sample(db):
     return added
 
 
+def clear_sample_data(db):
+    data = json.loads(
+        Path(__file__).with_name("sample.json").read_text(encoding="utf-8")
+    )
+    sample_matches = list(
+        db.scalars(select(Match).where(Match.source == "sample"))
+    )
+    match_ids = [match.id for match in sample_matches]
+    for model in (Notification, Follow, Pick, Prediction):
+        if match_ids:
+            db.execute(delete(model).where(model.match_id.in_(match_ids)))
+    if match_ids:
+        db.execute(delete(Match).where(Match.id.in_(match_ids)))
+
+    codes = [league["code"] for league in data["leagues"]]
+    for league in db.scalars(select(League).where(League.code.in_(codes))):
+        teams = list(db.scalars(select(Team).where(Team.league_id == league.id)))
+        for team in teams:
+            used = db.scalar(
+                select(Match.id)
+                .where(or_(Match.home_id == team.id, Match.away_id == team.id))
+                .limit(1)
+            )
+            if not used:
+                db.execute(delete(Favorite).where(Favorite.team_id == team.id))
+                db.delete(team)
+        if not db.scalar(
+            select(Team.id).where(Team.league_id == league.id).limit(1)
+        ):
+            db.delete(league)
+    return len(match_ids)
+
+
 def main():
     with SessionLocal() as db:
+        removed = clear_sample_data(db)
         if not db.scalar(select(User).where(User.role == "ADMIN")):
             username = os.getenv("SEED_ADMIN_USERNAME")
             password = os.getenv("SEED_ADMIN_PASSWORD")
@@ -101,11 +149,8 @@ def main():
             db.add(Setting(key="site_name", value="PredictPro"))
         if not db.get(Setting, "maintenance"):
             db.add(Setting(key="maintenance", value="false"))
-        count = seed_sample(db)
         db.commit()
-        print(
-            f"Seed complete: {count} synthetic matches added. Initial administrator must change password."
-        )
+        print(f"Initialization complete; removed {removed} synthetic matches.")
 
 
 if __name__ == "__main__":
