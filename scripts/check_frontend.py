@@ -8,7 +8,7 @@ files = [p for p in (root / "frontend").rglob("*.js") if "vendor" not in p.parts
 for p in files:
     subprocess.run(
         ["node", "--input-type=module", "--check"],
-        input=p.read_text(),
+        input=p.read_text(encoding="utf-8"),
         text=True,
         check=True,
     )
